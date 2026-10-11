@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>PodPlay</title>
+<style>
+:root{--bg:#0c1018;--card:#151b27;--line:#253044;--txt:#e9eef6;--mut:#8a96ab;--acc:#2fd0ff;--bad:#ff4d5e;--ok:#35e07a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:560px;margin:0 auto;padding:12px 16px 40px}
+header{display:flex;align-items:center;gap:10px;padding:6px 0 12px}
+header h1{font-size:22px;margin:0;flex:1;letter-spacing:.5px}
+header h1 span{color:var(--acc)}
+.pill{font-size:13px;color:var(--mut);background:var(--card);border:1px solid var(--line);padding:4px 10px;border-radius:99px}
+button{font:inherit;color:var(--txt);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;cursor:pointer}
+button.pri{background:var(--acc);color:#04202b;border:0;font-weight:600}
+button.bad{background:var(--bad);border:0;color:#fff;font-weight:600}
+button:active{transform:scale(.97)}
+.board{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:12px}
+.pod{aspect-ratio:1;border-radius:50%;background:#1c2332;border:3px solid #2b3446;position:relative;transition:background .08s,box-shadow .08s;user-select:none;touch-action:manipulation}
+.pod.on{border-color:rgba(255,255,255,.5)}
+.pod small{position:absolute;bottom:-2px;left:50%;transform:translate(-50%,100%);font-size:11px;color:var(--mut);white-space:nowrap}
+.pod.hidden{opacity:.15;pointer-events:none}
+.pod.tap{transform:scale(.92)}
+.board{padding-bottom:30px}
+#live{display:none;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;margin-bottom:12px;text-align:center}
+#live .big{font-size:44px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+#live .sub{color:var(--mut);font-size:14px;margin:4px 0 10px}
+nav{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px}
+nav button{padding:9px 4px;font-size:14px}
+nav button.act{border-color:var(--acc);color:var(--acc)}
+section{display:none}section.act{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.card h3{margin:0 0 4px;font-size:17px}
+.card p{margin:0 0 10px;color:var(--mut);font-size:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mode{text-align:left;padding:14px}
+.mode b{display:block;font-size:16px}
+.mode span{display:block;font-size:13px;color:var(--mut);margin-top:2px}
+.kid{font-size:20px;padding:22px 14px;text-align:center}
+.kid span{display:block;font-size:13px;color:var(--mut);margin-top:4px}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+input,select{width:100%;font:inherit;color:var(--txt);background:#0f1520;border:1px solid var(--line);border-radius:10px;padding:9px 10px}
+input[type=range]{padding:0}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{flex:1}
+.hist{font-size:14px;color:var(--mut)}
+.hist div{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding:6px 0}
+#log{background:#0a0e15;border:1px solid var(--line);border-radius:12px;padding:10px;font:12px/1.45 ui-monospace,Menlo,monospace;height:340px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%}
+#lock{position:fixed;inset:0;background:#000;display:none;z-index:9;align-items:center;justify-content:center;flex-direction:column;color:#333}
+#lock .hold{position:absolute;top:calc(16px + env(safe-area-inset-top));right:16px;width:64px;height:64px;border-radius:50%;border:2px solid #222;display:flex;align-items:center;justify-content:center;font-size:24px;user-select:none}
+#lock .hold.pressing{border-color:var(--acc)}
+.note{font-size:13px;color:var(--mut)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Pod<span>Play</span></h1>
+    <span class="pill" id="conn">Simulator</span>
+    <button class="pri" id="btnAdd">+ Pod</button>
+  </header>
+
+  <div class="board" id="board"></div>
+
+  <div id="live">
+    <div id="liveName" class="note"></div>
+    <div class="big" id="liveBig">–</div>
+    <div class="sub" id="liveSub"></div>
+    <button class="bad" id="btnStop">Stopp</button>
+  </div>
+
+  <nav>
+    <button data-t="train" class="act">Training</button>
+    <button data-t="kids">Kinder</button>
+    <button data-t="setup">Setup</button>
+    <button data-t="log">Log</button>
+  </nav>
+
+  <!-- TRAINING -->
+  <section id="train" class="act">
+    <div class="grid2">
+      <button class="mode" data-g="reaction"><b>Reaktion</b><span>Runden, Zeit pro Treffer in ms</span></button>
+      <button class="mode" data-g="sprint"><b>Sprint</b><span>Max. Treffer in X Sekunden</span></button>
+      <button class="mode" data-g="focus"><b>Fokus</b><span>Nur Zielfarbe, Ablenker meiden</span></button>
+      <button class="mode" data-g="simon"><b>Gedächtnis</b><span>Sequenz merken & wiederholen</span></button>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div class="grid2">
+        <div><label>Runden (Reaktion)</label><input id="rounds" type="number" min="1" max="200" value="20"></div>
+        <div><label>Dauer s (Sprint/Fokus)</label><input id="secs" type="number" min="5" max="300" value="30"></div>
+        <div><label>Lichtfarbe</label><select id="tcolor"></select></div>
+        <div><label>Ablenker (Fokus)</label><input id="distr" type="number" min="1" max="5" value="2"></div>
+      </div>
+      <label>Pods im Simulator</label>
+      <input id="simCount" type="range" min="1" max="6" value="6">
+    </div>
+    <div class="card"><h3>Verlauf</h3><div class="hist" id="hist"></div></div>
+  </section>
+
+  <!-- KINDER -->
+  <section id="kids">
+    <button class="kid" data-g="magic" style="width:100%;margin-bottom:10px">🌈 Farbenzauber<span>Antippen = neue Farbe + Ton. Kein Ende, kein Verlieren.</span></button>
+    <button class="kid" data-g="catch" style="width:100%;margin-bottom:10px">✨ Licht fangen<span>Ein Licht leuchtet, Antippen = Feuerwerk. Wandert langsam weiter.</span></button>
+    <button class="kid" data-g="disco" style="width:100%;margin-bottom:10px">🪩 Disco<span>Farben laufen von selbst. Zum Zuschauen & Draufhauen.</span></button>
+    <div class="card">
+      <label>Tempo</label>
+      <input id="kidSpeed" type="range" min="1" max="5" value="2">
+      <div class="row" style="margin-top:12px">
+        <button id="btnSound">🔊 Ton an</button>
+        <button id="btnLock">🔒 Kindersperre</button>
+      </div>
+      <p class="note" style="margin-top:10px">Kindersperre: Bildschirm wird schwarz, Spiel läuft weiter. Entsperren: Symbol oben rechts 3 s gedrückt halten.</p>
+    </div>
+  </section>
+
+  <!-- SETUP -->
+  <section id="setup">
+    <div class="card">
+      <h3>Bluetooth-Protokoll</h3>
+      <p>Werte aus nRF Connect bzw. dem Mitschnitt eintragen. 4-stellige UUIDs (z. B. ffe0) gehen auch.</p>
+      <label>Gerätename beginnt mit</label><input id="cPrefix">
+      <label>Service-UUID</label><input id="cService" placeholder="z. B. 6e400001-…">
+      <label>Weitere Service-UUIDs (optional, für Erkundung)</label><input id="cExtra" placeholder="mit Komma trennen">
+      <label>Licht-Characteristic (write)</label><input id="cLight">
+      <label>Tap-Characteristic (notify)</label><input id="cTap">
+      <label>Tap nur wenn Daten beginnen mit (Hex, optional)</label><input id="cTapMatch" placeholder="z. B. 01">
+      <label>Farb-Befehl (Hex mit {R} {G} {B})</label><input id="cTpl">
+      <label>Aus-Befehl (optional, sonst Farbe 00 00 00)</label><input id="cTplOff">
+      <button class="pri" id="btnSave" style="margin-top:12px;width:100%">Speichern</button>
+    </div>
+    <div class="card">
+      <h3>Rohbytes testen</h3>
+      <p>Schickt Hex direkt an die Licht-Characteristic. Zum Ausprobieren von Befehlen.</p>
+      <div class="row"><select id="rawPod"></select><input id="rawHex" placeholder="01 ff 00 00"></div>
+      <button id="btnRaw" style="margin-top:10px;width:100%">Senden</button>
+    </div>
+  </section>
+
+  <!-- LOG -->
+  <section id="log-s">
+    <div id="log"></div>
+    <div class="row" style="margin-top:10px"><button id="btnCopy">Kopieren</button><button id="btnClear">Leeren</button></div>
+  </section>
+</div>
+
+<div id="lock"><div class="hold" id="hold">🔒</div></div>
+<div id="toast"></div>
+
+<script>
+// ---------- Grundlagen ----------
+const $ = s => document.querySelector(s);
+const COLORS = {off:[0,0,0],rot:[255,0,0],gruen:[0,255,0],blau:[0,60,255],gelb:[255,190,0],cyan:[0,255,255],magenta:[255,0,190],weiss:[255,255,255],orange:[255,80,0]};
+const CSS = {off:'#1c2332',rot:'#ff3b3b',gruen:'#2fe36b',blau:'#3070ff',gelb:'#ffd02f',cyan:'#2ff0f0',magenta:'#ff3bd0',weiss:'#ffffff',orange:'#ff7a1f'};
+const NAMES = {rot:'Rot',gruen:'Grün',blau:'Blau',gelb:'Gelb',cyan:'Cyan',magenta:'Magenta',weiss:'Weiss',orange:'Orange'};
+const PLAY = ['rot','gruen','blau','gelb','cyan','magenta','weiss','orange'];
+const TONES = {rot:262,gruen:294,blau:330,gelb:349,cyan:392,magenta:440,weiss:494,orange:523};
+const load = (k,d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch(e){ return d; } };
+const save = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
+const rnd = (a,b) => a + Math.random()*(b-a);
+const h2 = n => n.toString(16).padStart(2,'0');
+const hex = dv => Array.from(new Uint8Array(dv.buffer)).map(h2).join(' ');
+function toast(m){ const t=$('#toast'); t.textContent=m; t.style.opacity=1; clearTimeout(toast.t); toast.t=setTimeout(()=>t.style.opacity=0,2400); }
+function log(m){ const l=$('#log'); l.textContent += new Date().toLocaleTimeString('de-CH')+'  '+m+'\n'; l.scrollTop=l.scrollHeight; }
+
+// ---------- Ton ----------
+let ac, sound = load('podplay_sound', true);
+function beep(f=660,d=.08,type='sine',vol=.18){
+  if(!sound) return;
+  try{
+    ac = ac || new (window.AudioContext||window.webkitAudioContext)();
+    const o=ac.createOscillator(), g=ac.createGain();
+    o.type=type; o.frequency.value=f;
+    g.gain.setValueAtTime(vol,ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+d);
+    o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime+d+.03);
+  }catch(e){}
+}
+function melody(notes,step=110){ notes.forEach((f,i)=>later(()=>beep(f,.12,'triangle'),i*step)); }
+
+// ---------- Konfiguration ----------
+const DEF = {prefix:'Blaze',service:'',extra:'',light:'',tap:'',tapMatch:'',tpl:'{R} {G} {B}',tplOff:''};
+let cfg = Object.assign({}, DEF, load('podplay_cfg', {}));
+const F = {prefix:'#cPrefix',service:'#cService',extra:'#cExtra',light:'#cLight',tap:'#cTap',tapMatch:'#cTapMatch',tpl:'#cTpl',tplOff:'#cTplOff'};
+Object.entries(F).forEach(([k,s])=>$(s).value=cfg[k]);
+$('#btnSave').onclick=()=>{ Object.entries(F).forEach(([k,s])=>cfg[k]=$(s).value.trim()); save('podplay_cfg',cfg); toast('Gespeichert. Pods neu verbinden.'); };
+function normUuid(u){ u=u.trim().toLowerCase(); return /^[0-9a-f]{4}$/.test(u) ? `0000${u}-0000-1000-8000-00805f9b34fb` : u; }
+function parseHex(s){ return new Uint8Array(s.trim().split(/[\s,:]+/).filter(Boolean).map(x=>parseInt(x,16))); }
+
+// ---------- Pods ----------
+const pods = Array.from({length:6},(_,i)=>({i,name:'Pod '+(i+1),dev:null,light:null,color:'off',q:Promise.resolve()}));
+const bleCount = () => pods.filter(p=>p.dev).length;
+function activePods(){
+  const ble = pods.filter(p=>p.dev).map(p=>p.i);
+  if(ble.length) return ble;
+  return pods.slice(0, +$('#simCount').value).map(p=>p.i);
+}
+function renderBoard(){
+  const act = activePods();
+  $('#board').innerHTML = pods.map(p=>{
+    const c = p.color, lit = c!=='off';
+    return `<div class="pod ${lit?'on':''} ${act.includes(p.i)?'':'hidden'}" data-i="${p.i}"
+      style="background:${CSS[c]};box-shadow:${lit?`0 0 28px ${CSS[c]}`:'none'}"><small>${p.dev?'● '+p.name:'Sim '+(p.i+1)}</small></div>`;
+  }).join('');
+  const n = bleCount();
+  $('#conn').textContent = n ? `${n} Pod${n>1?'s':''} verbunden` : 'Simulator';
+  $('#rawPod').innerHTML = pods.filter(p=>p.dev).map(p=>`<option value="${p.i}">${p.name}</option>`).join('') || '<option>kein Pod</option>';
+}
+function setColor(i,c){
+  const p=pods[i]; if(!p) return;
+  p.color=c; renderBoard();
+  if(!p.light) return;
+  let data;
+  if(c==='off' && cfg.tplOff) data = parseHex(cfg.tplOff);
+  else { const [r,g,b]=COLORS[c]; data = parseHex(cfg.tpl.replace(/\{R\}/gi,h2(r)).replace(/\{G\}/gi,h2(g)).replace(/\{B\}/gi,h2(b))); }
+  writeRaw(p,data);
+}
+function writeRaw(p,data){
+  p.q = p.q.then(()=> p.light.writeValueWithoutResponse ? p.light.writeValueWithoutResponse(data) : p.light.writeValue(data))
+           .catch(e=>log(p.name+' Write-Fehler: '+e.message));
+}
+const allOff = () => pods.forEach(p=>{ if(p.color!=='off' || p.light) setColor(p.i,'off'); });
+$('#board').addEventListener('pointerdown', e=>{
+  const el = e.target.closest('.pod'); if(!el) return;
+  el.classList.add('tap'); setTimeout(()=>el.classList.remove('tap'),120);
+  handleTap(+el.dataset.i);
+});
+$('#simCount').oninput = renderBoard;
+
+// ---------- Bluetooth ----------
+async function connectPod(){
+  if(!navigator.bluetooth){ toast('Kein Web Bluetooth. Auf dem iPhone die App „Bluefy“ verwenden.'); log('navigator.bluetooth fehlt. iPhone: Bluefy. Android: Chrome. Seite muss über https laufen.'); return; }
+  const p = pods.find(p=>!p.dev); if(!p){ toast('Alle 6 Plätze belegt'); return; }
+  const services = [cfg.service, ...cfg.extra.split(',')].filter(s=>s&&s.trim()).map(normUuid);
+  const opts = cfg.prefix ? {filters:[{namePrefix:cfg.prefix}],optionalServices:services} : {acceptAllDevices:true,optionalServices:services};
+  try{
+    const dev = await navigator.bluetooth.requestDevice(opts);
+    log(`Gerät gewählt: ${dev.name||'?'} (${dev.id})`);
+    const gatt = await dev.gatt.connect();
+    p.dev = dev; p.name = dev.name || p.name;
+    dev.addEventListener('gattserverdisconnected',()=>{ p.dev=null; p.light=null; p.color='off'; log(p.name+' getrennt'); renderBoard(); });
+    try{
+      for(const s of await gatt.getPrimaryServices()){
+        log('Service '+s.uuid);
+        for(const c of await s.getCharacteristics()){
+          const pr = ['read','write','writeWithoutResponse','notify','indicate'].filter(k=>c.properties[k]);
+          log('   Char '+c.uuid+'  ['+pr.join(', ')+']');
+        }
+      }
+    }catch(e){ log('Services nicht lesbar ('+e.message+'). Service-UUIDs im Setup eintragen.'); }
+    if(cfg.service){
+      const s = await gatt.getPrimaryService(normUuid(cfg.service));
+      if(cfg.light) p.light = await s.getCharacteristic(normUuid(cfg.light));
+      if(cfg.tap){
+        const t = await s.getCharacteristic(normUuid(cfg.tap));
+        await t.startNotifications();
+        const idx = p.i;
+        t.addEventListener('characteristicvaluechanged', e=>{
+          const h = hex(e.target.value); log(p.name+' ← '+h);
+          const m = cfg.tapMatch.replace(/\s/g,'').toLowerCase();
+          if(!m || h.replace(/ /g,'').startsWith(m)) handleTap(idx);
+        });
+      }
+    }
+    renderBoard(); toast(p.name+' verbunden'); beep(880,.1);
+  }catch(e){ log('Fehler: '+e.message); if(e.name!=='NotFoundError') toast(e.message); }
+}
+$('#btnAdd').onclick = connectPod;
+$('#btnRaw').onclick = ()=>{
+  const p = pods[+$('#rawPod').value]; if(!p||!p.light){ toast('Kein Pod mit Licht-Characteristic'); return; }
+  const d = parseHex($('#rawHex').value); log(p.name+' → '+Array.from(d).map(h2).join(' ')); writeRaw(p,d);
+};
+
+// ---------- Spiel-Engine ----------
+let G=null, timers=[];
+function later(fn,ms){ const t=setTimeout(fn,ms); timers.push(t); return t; }
+function clearTimers(){ timers.forEach(clearTimeout); timers=[]; }
+function live(name,big,sub){ $('#live').style.display='block'; if(name!=null)$('#liveName').textContent=name; if(big!=null)$('#liveBig').textContent=big; if(sub!=null)$('#liveSub').textContent=sub; }
+function stopGame(){
+  timers.forEach(clearTimeout); timers=[];
+  if(G&&G.iv) clearInterval(G.iv);
+  G=null; allOff(); $('#live').style.display='none';
+}
+$('#btnStop').onclick = stopGame;
+function handleTap(i){ if(G&&G.onTap) G.onTap(i); else beep(TONES[PLAY[i%8]],.08); }
+function pick(list,not){ const l = list.length>1 ? list.filter(x=>x!==not) : list; return l[Math.floor(Math.random()*l.length)]; }
+const colorChoice = () => { const v=$('#tcolor').value; return v==='zufall' ? PLAY[Math.floor(Math.random()*PLAY.length)] : v; };
+function celebrate(list){ const seq=['rot','orange','gelb','gruen','cyan','blau','magenta']; seq.forEach((c,k)=>later(()=>list.forEach((p,j)=>setColor(p,seq[(k+j)%seq.length])),k*120)); later(()=>list.forEach(p=>setColor(p,'off')),seq.length*120); }
+function finish(name,score,detail){
+  const h = load('podplay_hist',[]); h.unshift({m:name,s:score,d:new Date().toISOString()}); save('podplay_hist',h.slice(0,50));
+  const list=activePods(); G={onTap:()=>{}}; celebrate(list); melody([523,659,784,1047]);
+  live(name+' – fertig', score, detail); renderHist();
+  later(()=>{ G=null; },1200);
+}
+function renderHist(){
+  const h = load('podplay_hist',[]);
+  $('#hist').innerHTML = h.length ? h.slice(0,8).map(x=>`<div><span>${x.m}</span><span>${x.s}</span><span>${new Date(x.d).toLocaleDateString('de-CH')}</span></div>`).join('') : 'Noch keine Einheiten.';
+}
+
+// Reaktion & Sprint
+function startReaction(timed){
+  stopGame(); const list=activePods(); if(!list.length) return;
+  const rounds=Math.max(1,+$('#rounds').value||20), secs=Math.max(5,+$('#secs').value||30);
+  const times=[]; let lit=-1,t0=0,miss=0,tEnd=0;
+  const name = timed ? 'Sprint' : 'Reaktion';
+  G={};
+  const next=()=>{
+    if(!timed && times.length>=rounds) return end();
+    later(()=>{ lit=pick(list,lit); t0=performance.now(); setColor(lit,colorChoice()); }, timed?rnd(0,250):rnd(500,1600));
+  };
+  const end=()=>{ clearTimers(); const avg=times.length?Math.round(times.reduce((a,b)=>a+b,0)/times.length):0;
+    finish(name, timed?`${times.length} Treffer`:`Ø ${avg} ms`, `Bestzeit ${times.length?Math.round(Math.min(...times)):'–'} ms · Fehler ${miss}`+(timed?` · Ø ${avg} ms`:'')); };
+  G.onTap=i=>{
+    if(lit<0) return;
+    if(i===lit){ const t=performance.now()-t0; times.push(t); setColor(lit,'off'); lit=-1; beep(880,.05);
+      live(null, Math.round(t)+' ms', timed?`${times.length} Treffer`:`Runde ${times.length}/${rounds}`); next(); }
+    else { miss++; beep(160,.12,'square',.1); }
+  };
+  live(name,'Los!', timed?`${secs} s`:`Runde 0/${rounds}`);
+  if(timed){ tEnd=performance.now()+secs*1000; G.iv=setInterval(()=>{ const r=Math.ceil((tEnd-performance.now())/1000); $('#liveName').textContent=`${name} · noch ${r} s`; if(r<=0){ clearInterval(G.iv); setColor(lit,'off'); lit=-1; end(); } },200); }
+  later(next,600);
+}
+
+// Fokus
+function startFocus(){
+  stopGame(); const list=activePods(); if(list.length<2){ toast('Fokus braucht mind. 2 Pods'); return; }
+  const secs=Math.max(5,+$('#secs').value||30), k=Math.min(Math.max(1,+$('#distr').value||2),list.length-1);
+  let target=-1, distr=[], hits=0, err=0, t0=0, times=[];
+  G={};
+  const round=()=>{
+    later(()=>{ target=pick(list,target); distr=list.filter(x=>x!==target).sort(()=>Math.random()-.5).slice(0,k);
+      setColor(target,'gruen'); distr.forEach(d=>setColor(d,'rot')); t0=performance.now(); }, rnd(300,900));
+  };
+  G.onTap=i=>{
+    if(target<0) return;
+    if(i===target){ hits++; times.push(performance.now()-t0); beep(880,.05); [target,...distr].forEach(x=>setColor(x,'off')); target=-1; live(null,hits,`Fehler ${err}`); round(); }
+    else if(distr.includes(i)){ err++; beep(160,.15,'square',.1); live(null,hits,`Fehler ${err}`); }
+  };
+  const tEnd=performance.now()+secs*1000;
+  G.iv=setInterval(()=>{ const r=Math.ceil((tEnd-performance.now())/1000); $('#liveName').textContent=`Fokus · Grün antippen · noch ${r} s`;
+    if(r<=0){ clearInterval(G.iv); clearTimers(); allOff(); target=-1; const avg=times.length?Math.round(times.reduce((a,b)=>a+b,0)/times.length):0; finish('Fokus',`${hits} Treffer`,`Fehler ${err} · Ø ${avg} ms`); } },200);
+  live('Fokus','0','Nur Grün antippen'); later(round,600);
+}
+
+// Gedächtnis (Simon)
+function startSimon(){
+  stopGame(); const list=activePods(); if(list.length<2){ toast('Gedächtnis braucht mind. 2 Pods'); return; }
+  const seq=[]; let pos=0, input=false;
+  const col = i => PLAY[list.indexOf(i)%PLAY.length];
+  G={};
+  const show=()=>{
+    input=false; seq.push(list[Math.floor(Math.random()*list.length)]); pos=0;
+    live(null,'Stufe '+seq.length,'Zuschauen …');
+    seq.forEach((p,n)=>{ later(()=>{ setColor(p,col(p)); beep(TONES[col(p)],.3,'triangle'); }, 700+n*750); later(()=>setColor(p,'off'), 700+n*750+480); });
+    later(()=>{ input=true; live(null,null,'Jetzt du!'); }, 700+seq.length*750);
+  };
+  G.onTap=i=>{
+    if(!input) return;
+    if(i===seq[pos]){ setColor(i,col(i)); beep(TONES[col(i)],.15,'triangle'); later(()=>setColor(i,'off'),200); pos++;
+      if(pos===seq.length){ input=false; later(show,600); } }
+    else { input=false; list.forEach(x=>setColor(x,'rot')); beep(120,.4,'sawtooth',.12);
+      later(()=>finish('Gedächtnis',`Stufe ${seq.length-1}`,`Sequenz von ${seq.length-1} geschafft`),700); }
+  };
+  live('Gedächtnis','Stufe 1','Zuschauen …'); show();
+}
+
+// ---------- Kinder ----------
+const kidSpeed = () => +$('#kidSpeed').value; // 1 langsam – 5 schnell
+function startMagic(){
+  stopGame(); const list=activePods(); const state={};
+  list.forEach((p,n)=>{ state[p]=n%PLAY.length; setColor(p,PLAY[state[p]]); });
+  G={onTap:i=>{ if(!(i in state)) return; state[i]=(state[i]+1)%PLAY.length; const c=PLAY[state[i]]; setColor(i,c); beep(TONES[c],.35,'triangle',.22); live(null,NAMES[c],null); }};
+  live('Farbenzauber','🌈','Antippen = neue Farbe');
+}
+function startCatch(){
+  stopGame(); const list=activePods(); let lit=-1, move=null, n=0;
+  G={};
+  const light=()=>{ lit=pick(list,lit); setColor(lit,PLAY[Math.floor(Math.random()*PLAY.length)]);
+    clearTimeout(move); move=later(()=>{ setColor(lit,'off'); light(); }, 12000/kidSpeed()); };
+  G.onTap=i=>{ if(i!==lit) return; clearTimeout(move); lit=-1; n++; live(null,'⭐ '+n,'Super!'); celebrate(list); melody([523,659,784,1047,784,1047],90); later(light,1600); };
+  live('Licht fangen','⭐ 0','Tipp das Licht an!'); later(light,500);
+}
+function startDisco(){
+  stopGame(); const list=activePods(); let k=0;
+  G={onTap:i=>{ setColor(i,'weiss'); beep(TONES[PLAY[(k+i)%8]],.25,'triangle',.22); }};
+  const tick=()=>{ k++; list.forEach((p,j)=>setColor(p,PLAY[(k+j)%PLAY.length])); G.iv2=later(tick,1400/kidSpeed()); };
+  live('Disco','🪩','Läuft von selbst – antippen erlaubt'); tick();
+}
+
+// ---------- UI-Verdrahtung ----------
+$('#tcolor').innerHTML = '<option value="zufall">Zufall</option>' + PLAY.map(c=>`<option value="${c}" ${c==='gruen'?'selected':''}>${NAMES[c]}</option>`).join('');
+const GAMES = {reaction:()=>startReaction(false),sprint:()=>startReaction(true),focus:startFocus,simon:startSimon,magic:startMagic,catch:startCatch,disco:startDisco};
+document.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>{ beep(1,.01); GAMES[b.dataset.g](); window.scrollTo({top:0,behavior:'smooth'}); });
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('act',x===b));
+  document.querySelectorAll('section').forEach(s=>s.classList.toggle('act', s.id===b.dataset.t || s.id===b.dataset.t+'-s'));
+});
+const setSoundBtn=()=>$('#btnSound').textContent = sound?'🔊 Ton an':'🔇 Ton aus';
+$('#btnSound').onclick=()=>{ sound=!sound; save('podplay_sound',sound); setSoundBtn(); };
+$('#btnCopy').onclick=()=>{ navigator.clipboard?.writeText($('#log').textContent).then(()=>toast('Log kopiert')); };
+$('#btnClear').onclick=()=>$('#log').textContent='';
+// Kindersperre
+$('#btnLock').onclick=()=>{ $('#lock').style.display='flex'; };
+let holdT; const hold=$('#hold');
+hold.addEventListener('pointerdown',()=>{ hold.classList.add('pressing'); holdT=setTimeout(()=>{ $('#lock').style.display='none'; hold.classList.remove('pressing'); },3000); });
+['pointerup','pointerleave','pointercancel'].forEach(ev=>hold.addEventListener(ev,()=>{ clearTimeout(holdT); hold.classList.remove('pressing'); }));
+$('#lock').addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+
+setSoundBtn(); renderBoard(); renderHist();
+log('PodPlay bereit. Web Bluetooth: '+(navigator.bluetooth?'verfügbar':'nicht verfügbar (iPhone → Bluefy)'));
+</script>
+</body>
+</html>
